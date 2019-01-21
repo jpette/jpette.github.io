@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<script type="text/javascript" src="https://d3js.org/d3.v4.min.js"></script>
+		<style type="text/css">
+		</style>
+	</head>
+	<body style="font-family:sans-serif;">
+		<h2 style="color:black;font-size:25px;font-weight:bold;font-family:sans-serif;margin-left:250px;">A Week of Eating Behavior</h2>
+		<p>
+			<!-- Add buttons to toggle between highlighting meals and snacks -->
+			<div class="buttons">
+			<button class="clicker" id="snacks">Snacks</button>
+			<button class="clicker" id="meals">Meals</button>
+			</div>
+		</p>
+		
+		<script type="text/javascript">
+		
+			//Width and height
+			var w = 800;
+			var h = 500;
+			var padding = 60;
+			
+			var dataset, xScale, yScale, xAxis, yAxis;  //Empty, for now
+
+			//For converting strings to Dates
+			var parseTime = d3.timeParse("%m/%d/%y");
+
+			//For converting Dates to strings
+			var formatTime = d3.timeFormat("%A");
+
+			//Function for converting CSV values from strings to Dates and numbers
+			var rowConverter = function(d) {
+				return {
+					Date: parseTime(d.Date),
+					Hour: parseInt(d.Hour),
+					Size: parseInt(d.Size),
+					Meal: d.Meal,
+					Food: d.Food
+				};
+			}
+
+			//Load in the data
+			d3.csv("Food_Data.csv", rowConverter, function(data) {
+
+				//Copy data into global dataset
+				dataset = data;
+
+				//Create scale functions
+				xScale = d3.scaleTime()
+							   .domain([
+									d3.min(dataset, function(d) { return d.Date; }),
+									d3.max(dataset, function(d) { return d.Date; })
+								])
+							   .range([padding*1.5, w - padding*1.5]);
+
+				yScale = d3.scaleLinear()
+							   .domain([
+									d3.max(dataset, function(d) { return d.Hour; }),
+									d3.min(dataset, function(d) { return d.Hour; })
+								])
+							   .range([h - padding*1.5, padding]);
+
+				//Define X axis
+				xAxis = d3.axisBottom()
+								  .scale(xScale)
+								  .ticks(5)
+								  .tickFormat(function (d) { return formatTime(d)});
+
+				//Define Y axis
+				yAxis = d3.axisLeft()
+								  .scale(yScale)
+								  .ticks(16)
+								  .tickFormat(function (d, i) {
+                                   return ['10:00 PM', '9:00 PM', '8:00PM', '7:00 PM', '6:00 PM', '5:00 PM', 
+								   '4:00 PM', '3:00 PM', '2:00 PM', '1:00 PM', '12:00 PM', '11:00 AM', '10:00 AM', 
+								   '9:00 AM', '8:00 AM', '7:00 AM'][i];
+								   });
+
+				//Create SVG element
+				var svg = d3.select("body")
+							.append("svg")
+							.attr("width", w)
+							.attr("height", h);
+
+				//Create tooltip element
+				var tooltip = d3.select("body")
+					.append("div")
+					.style("position", "absolute")
+					.style("z-index", "10")
+					.style("visibility", "hidden")
+					.style("background", "#fcffd3")
+					.style("font-family", "sans-serif")
+					.style("font-size", "11px");							
+							
+				//Generate date labels first, so they are in back
+ 				svg.selectAll("text")
+ 				   .data(dataset)
+ 				   .enter()
+ 				   .append("text")
+ 				   .text(function(d) {
+ 				   		if(d.Meal == "Snack") {
+						     return d.Food;
+						 } else { 
+						     return d.Meal;
+						 }
+ 				   })
+ 				   .attr("x", function(d) {
+ 				   		return xScale(d.Date) + 13;
+ 				   })
+ 				   .attr("y", function(d) {
+ 				   		return yScale(d.Hour) + 4;
+ 				   })
+ 				   .attr("font-family", "sans-serif")
+ 				   .attr("font-size", "11px")
+ 				   .attr("fill", function(d) { 
+				         if(d.Meal == "Snack") {
+						     return "black";
+						 } else { 
+						     return "#bdbdbd";
+						 }
+				   });
+				   
+
+				//Generate circles last, so they appear in front
+				svg.selectAll("circle")
+				   .data(dataset)
+				   .enter()
+				   .append("circle")
+				   .attr("cx", function(d) {
+				   		return xScale(d.Date);
+				   })
+				   .attr("cy", function(d) {
+				   		return yScale(d.Hour);
+				   })
+				   .attr("r", function(d) {
+				        return (d.Size * 4);
+				   })
+				   //Add conditional fill to emphasize one category
+				   .attr("fill", function(d) { 
+				         if(d.Meal == "Snack") {
+						     return "#003fff";
+						 } else { 
+						     return "#bdbdbd";
+						 }
+				   })
+				   //Highlight circle on mouseover, display conditional tooltip
+				   .on("mouseover", function(d){
+						 d3.select(this).attr("fill", "orange");
+						
+				         if(d.Meal == "Snack") {
+						     tooltip.text(d.Meal); return tooltip.style("visibility", "visible");
+						 } else { 
+						     tooltip.text(d.Food); return tooltip.style("visibility", "visible");
+						 }
+					})
+				   .on("mousemove", function(){return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");})
+				   .on("mouseout", function(){
+				   
+						 d3.select(this).attr("fill", function(d) {
+						 if(d.Meal == "Snack") {
+						     return "#003fff";
+						 } else { 
+						     return "#bdbdbd";
+						 }
+					});
+						return tooltip.style("visibility", "hidden");});
+				   
+				d3.select("button#snacks").classed("selected", true);
+
+				//Handle click events for the two buttons
+
+				d3.selectAll("button.clicker").on("click", function() {
+
+					//Determine which button is selected
+					var whichbutton = d3.select(this).attr("id");
+
+					//Style the buttons to show which was clicked:
+					d3.select(this).classed("selected", true);
+
+					if (whichbutton === "meals") {
+						d3.select("button#snacks").classed("selected", false);
+					} else {
+						d3.select("button#meals").classed("selected", false);
+					}
+
+					//Check whether meals or snacks is selected and return appropriate data, text, styling
+
+						svg.selectAll("circle")
+						    .attr("fill", function(d) { 
+								 if (whichbutton === "snacks") {
+									if(d.Meal == "Snack") {
+									    return "#003fff";
+								    } else { 
+									    return "#bdbdbd";
+									}
+								 } else {
+									  if(d.Meal == "Snack") {
+									      return "#bdbdbd";
+								      } else { 
+									      return "#00bfff";
+									  }
+								   }	
+						    })
+						   .on("mouseover", function(d){
+								d3.select(this).attr("fill", "orange");
+								
+								if (whichbutton === "snacks") {						   
+									if(d.Meal == "Snack") {
+										 tooltip.text(d.Meal); return tooltip.style("visibility", "visible");
+									 } else { 
+										 tooltip.text(d.Food); return tooltip.style("visibility", "visible");
+									 }
+								 } else {
+									if(d.Meal == "Snack") {
+									      tooltip.text(d.Food); return tooltip.style("visibility", "visible");
+								      } else { 
+									      tooltip.text(d.Meal); return tooltip.style("visibility", "visible");
+									  }
+								 }})
+						   .on("mousemove", function(){return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");})
+						   .on("mouseout", function(){
+								d3.select(this).attr("fill", function(d) {
+									if (whichbutton === "snacks") {
+										if(d.Meal == "Snack") {
+											return "#003fff";
+										} else { 
+											return "#bdbdbd";
+										}
+									 } else {
+										if(d.Meal == "Snack") {
+											  return "#bdbdbd";
+										  } else { 
+											  return "#00bfff";
+										  }
+								}});
+								   
+								return tooltip.style("visibility", "hidden");});
+
+						//Conditionally style the circle fill color and text labels based on which button was selected
+						svg.selectAll("text")
+						    .text(function(d) { 
+								 if (whichbutton === "snacks") {
+									if(d.Meal == "Snack") {
+									    return d.Food;
+								    } else { 
+									    return d.Meal;
+									}
+								 } else {
+									  if(d.Meal == "Snack") {
+									      return d.Meal;
+								      } else { 
+									      return d.Food;
+									  }
+								   }	
+						    })
+							.attr("fill", function(d) { 
+								 if (whichbutton === "snacks") {
+									if(d.Meal == "Snack") {
+									    return "black";
+								    } else { 
+									    return "#bdbdbd";
+									}
+								 } else {
+									  if(d.Meal == "Snack") {
+									      return "#bdbdbd";
+								      } else { 
+									      return "black";
+									  }
+								   }	
+						    });
+						//Maintain X axis on button click
+						svg.append("g")
+							.attr("class", "axis")
+							.attr("transform", "translate(0," + (h - padding) + ")")
+							.call(xAxis);
+						
+						//Maintain Y axis on button click
+						svg.append("g")
+							.attr("class", "axis")
+							.attr("transform", "translate(" + padding + ",0)")
+							.call(yAxis);
+					});
+	   			
+	   			//Create X axis
+	   			svg.append("g")
+	   				.attr("class", "axis")
+	   				.attr("transform", "translate(0," + (h - padding) + ")")
+	   				.call(xAxis);
+	   			
+	   			//Create Y axis
+	   			svg.append("g")
+	   				.attr("class", "axis")
+	   				.attr("transform", "translate(" + padding + ",0)")
+	   				.call(yAxis);
+
+				//Add bulleted list of insights
+				d3.select("body").append("p").text("Insights:"); 
+				
+				var insights = ["My snacking was clustered in the afternoon hours, between lunch and dinner.", "I had minimal snack cravings after dinner.", "I held to my goal of only consuming healthy snacks."];
+
+				var ul = d3.select("body").append("ul");
+
+				ul.selectAll("li")
+				.data(insights)
+				.enter()
+				.append("li")
+				.html(String);
+			});
+			
+		</script>
+	</body>
+</html>
